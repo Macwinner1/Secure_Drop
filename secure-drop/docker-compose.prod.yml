@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      target: base
+    environment:
+      - APP_ENV=production
+      - APP_DEBUG=false
+    restart: always
+
+  nginx:
+    restart: always
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.secure-drop.rule=Host(`${DOMAIN:-secure-drop.example.com}`)"
+      - "traefik.http.routers.secure-drop.entrypoints=websecure"
+      - "traefik.http.routers.secure-drop.tls.certresolver=letsencrypt"
+      - "traefik.http.services.secure-drop.loadbalancer.server.port=80"
+
+  db:
+    restart: always
+
+  traefik:
+    image: traefik:v2.10
+    container_name: traefik
+    restart: always
+    command:
+      - "--api.insecure=false"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@example.com}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "traefik-certs:/letsencrypt"
+    networks:
+      - secure-drop-network
+
+volumes:
+  traefik-certs:

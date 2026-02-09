@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      target: base
+    volumes:
+      - ./:/var/www/html
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
