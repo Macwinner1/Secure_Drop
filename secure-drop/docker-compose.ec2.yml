@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  app:
+    environment:
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - APP_URL=http://34.227.207.115
+    restart: always
+    volumes:
+      - ./:/var/www/html
+      - ./storage:/var/www/html/storage
+      - ./bootstrap/cache:/var/www/html/bootstrap/cache
+
+  nginx:
+    restart: always
+    ports:
+      - "80:80"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.secure-drop.rule=Host(`34.227.207.115`)"
+      - "traefik.http.routers.secure-drop.entrypoints=web"
+      - "traefik.http.services.secure-drop.loadbalancer.server.port=80"
+      # HTTP to HTTPS redirect (optional, for when you add domain)
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+
+  db:
+    restart: always
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-secure_drop}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-secure_password}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-secure_password}
+      MYSQL_USER: ${DB_USERNAME:-secure_user}
+
+  traefik:
+    image: traefik:v2.10
+    container_name: traefik
+    restart: always
+    command:
+      - "--api.insecure=false"
+      - "--api.dashboard=false"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--log.level=INFO"
+      - "--accesslog=true"
+    ports:
+      - "80:80"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    networks:
+      - secure-drop-network
