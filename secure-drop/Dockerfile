@@ -12,7 +12,7 @@ RUN apk add --no-cache \
     && docker-php-ext-install pdo pdo_mysql zip gd
 
 # Install Composer
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/bin --filename=composer
 
 WORKDIR /var/www/html
 

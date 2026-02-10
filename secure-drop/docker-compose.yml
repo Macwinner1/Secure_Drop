@@ -27,7 +27,7 @@ services:
     container_name: secure-drop-nginx
     restart: unless-stopped
     ports:
-      - "8000:80"
+      - "8001:80"
     volumes:
       - ./:/var/www/html
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
