@@ -1,114 +1,92 @@
 #!/bin/bash
 
-# Secure Drop - EC2 Setup Script
-# Run this on your EC2 instance to prepare for deployment
+# Secure Drop EC2 Setup Script
+# Run this on your EC2 instance: Ubuntu 24.04
 
 set -e
 
-echo "🚀 Secure Drop - EC2 Setup Script"
-echo "=================================="
-echo ""
-
-# Check if running as root
-if [ "$EUID" -eq 0 ]; then 
-    echo "⚠️  Please do not run as root. Run as ubuntu user."
-    exit 1
-fi
+echo "🚀 Setting up Secure Drop on EC2..."
 
 # Update system
 echo "📦 Updating system packages..."
-sudo apt update && sudo apt upgrade -y
+sudo apt-get update
+sudo apt-get upgrade -y
 
 # Install Docker
 echo "🐳 Installing Docker..."
-if ! command -v docker &> /dev/null; then
-    curl -fsSL https://get.docker.com -o get-docker.sh
-    sudo sh get-docker.sh
-    sudo usermod -aG docker $USER
-    rm get-docker.sh
-    echo "✅ Docker installed"
-else
-    echo "✅ Docker already installed"
-fi
+sudo apt-get install -y ca-certificates curl gnupg lsb-release
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
-# Install Docker Compose
-echo "🔧 Installing Docker Compose..."
-if ! command -v docker-compose &> /dev/null; then
-    sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-    sudo chmod +x /usr/local/bin/docker-compose
-    echo "✅ Docker Compose installed"
-else
-    echo "✅ Docker Compose already installed"
-fi
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+# Start Docker
+sudo systemctl start docker
+sudo systemctl enable docker
+
+# Add current user to docker group
+sudo usermod -aG docker $USER
+
+# Install Docker Compose standalone
+echo "📦 Installing Docker Compose..."
+sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
 
 # Install Git
-echo "📚 Installing Git..."
-if ! command -v git &> /dev/null; then
-    sudo apt install -y git
-    echo "✅ Git installed"
-else
-    echo "✅ Git already installed"
-fi
+echo "📦 Installing Git..."
+sudo apt-get install -y git
 
 # Create application directory
 echo "📁 Creating application directory..."
 sudo mkdir -p /opt/secure-drop
-sudo chown $USER:$USER /opt/secure-drop
-echo "✅ Directory created: /opt/secure-drop"
+sudo chown -R $USER:$USER /opt/secure-drop
 
-# Configure UFW firewall
-echo "🔒 Configuring firewall..."
-if command -v ufw &> /dev/null; then
-    sudo ufw --force enable
-    sudo ufw allow 22/tcp
-    sudo ufw allow 80/tcp
-    sudo ufw allow 443/tcp
-    sudo ufw status
-    echo "✅ Firewall configured"
-else
-    echo "⚠️  UFW not found, skipping firewall setup"
-fi
-
-# Enable automatic security updates
-echo "🛡️  Enabling automatic security updates..."
-sudo apt install -y unattended-upgrades
-sudo dpkg-reconfigure -plow unattended-upgrades
-echo "✅ Automatic updates enabled"
-
-# Display versions
-echo ""
-echo "📊 Installed Versions:"
-echo "====================="
-docker --version
-docker-compose --version
-git --version
-
-echo ""
-echo "✅ EC2 Setup Complete!"
-echo ""
-echo "📝 Next Steps:"
-echo "1. Logout and login again for Docker group changes:"
-echo "   exit"
-echo "   ssh -i your-key.pem ubuntu@your-ec2-ip"
-echo ""
-echo "2. Clone your repository:"
+# Clone repository (you'll need to do this manually or provide repo URL)
+echo "📥 Clone your repository:"
 echo "   cd /opt/secure-drop"
-echo "   git clone https://github.com/YOUR_USERNAME/secure-drop.git ."
+echo "   git clone <your-repo-url> ."
+
+# Create .env file
+echo "📝 Creating .env file..."
+cat > /opt/secure-drop/.env.example << 'EOF'
+APP_NAME="Secure Drop"
+APP_ENV=production
+APP_KEY=
+APP_DEBUG=false
+APP_URL=http://YOUR_EC2_IP_HERE
+
+LOG_CHANNEL=stack
+LOG_LEVEL=error
+
+DB_CONNECTION=mysql
+DB_HOST=db
+DB_PORT=3306
+DB_DATABASE=secure_drop
+DB_USERNAME=secure_drop
+DB_PASSWORD=CHANGE_THIS_SECURE_PASSWORD
+
+DOMAIN=YOUR_EC2_IP_OR_DOMAIN_HERE
+ACME_EMAIL=admin@example.com
+EOF
+
 echo ""
-echo "3. Configure environment:"
-echo "   cp .env.example .env"
-echo "   nano .env"
+echo "✅ EC2 setup completed!"
 echo ""
-echo "4. Login to GitHub Container Registry:"
-echo "   echo YOUR_PAT_TOKEN | docker login ghcr.io -u YOUR_USERNAME --password-stdin"
+echo "📋 Next steps:"
+echo "1. Clone your repository to /opt/secure-drop"
+echo "2. Copy .env.example to .env and update values"
+echo "3. Update APP_URL and DOMAIN with your EC2 IP or domain"
+echo "4. Generate APP_KEY: docker-compose exec app php artisan key:generate"
+echo "5. Run: cd /opt/secure-drop && ./deploy.sh"
 echo ""
-echo "5. Pull and start services:"
-echo "   docker pull ghcr.io/YOUR_USERNAME/secure-drop:latest"
-echo "   docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d"
-echo ""
-echo "6. Run migrations:"
-echo "   docker-compose exec app php artisan migrate --force"
-echo ""
-echo "🌐 Your application will be available at:"
-echo "   http://$(curl -s ifconfig.me)"
-echo ""
+echo "⚠️  Make sure to:"
+echo "   - Configure security group to allow ports 80, 443, 22"
+echo "   - Update DOMAIN in .env if using custom domain"
+echo "   - Change DB_PASSWORD to a strong password"
